@@ -8,7 +8,11 @@ import {
   mock投放Records,
   mockPointFlows,
   mockGifts,
-  mockExchangeRecords
+  mockExchangeRecords,
+  mockCorrectionRecords,
+  mockReminderList,
+  CORRECTION_STATUS,
+  CORRECTION_RESTORE_RATIO
 } from '../data/mockData'
 
 const state = reactive({
@@ -20,7 +24,9 @@ const state = reactive({
   投放Records: [...mock投放Records],
   pointFlows: [...mockPointFlows],
   gifts: [...mockGifts],
-  exchangeRecords: [...mockExchangeRecords]
+  exchangeRecords: [...mockExchangeRecords],
+  correctionRecords: [...mockCorrectionRecords],
+  reminderList: [...mockReminderList]
 })
 
 export function useDataStore() {
@@ -95,8 +101,21 @@ export function useDataStore() {
   }
 
   const add投放Record = (record) => {
+    const correctedOnSite = record.correctedOnSite === true
+    let correctionStatus = null
+    if (!record.isCorrect) {
+      if (correctedOnSite) {
+        correctionStatus = CORRECTION_STATUS.ONSITE
+      } else {
+        correctionStatus = CORRECTION_STATUS.PENDING
+      }
+    }
+
     const newRecord = {
       ...record,
+      correctType: record.correctType || null,
+      correctedOnSite,
+      correctionStatus,
       id: 'REC' + Date.now(),
       time: record.time || new Date().toISOString()
     }
@@ -119,7 +138,175 @@ export function useDataStore() {
       }
     }
 
+    if (correctedOnSite && !record.isCorrect) {
+      state.correctionRecords.unshift({
+        id: 'COR' + Date.now(),
+        recordId: newRecord.id,
+        residentId: record.residentId,
+        buildingId: record.buildingId,
+        action: 'onsite',
+        pointsRestored: 0,
+        operator: record.supervisor || '督导员',
+        time: newRecord.time,
+        remark: record.correctionResult || '当场纠正'
+      })
+    }
+
     return newRecord
+  }
+
+  const getPendingCorrections = (buildingId = null) => {
+    let list = state.投放Records.filter(
+      (r) => !r.isCorrect && r.correctionStatus === CORRECTION_STATUS.PENDING
+    )
+    if (buildingId) {
+      list = list.filter((r) => r.buildingId === buildingId)
+    }
+    return list.sort((a, b) => new Date(b.time) - new Date(a.time))
+  }
+
+  const getCorrectionsByResident = (residentId) => {
+    return state.correctionRecords
+      .filter((c) => c.residentId === residentId)
+      .sort((a, b) => new Date(b.time) - new Date(a.time))
+  }
+
+  const getPendingByResident = (residentId) => {
+    return state.投放Records.filter(
+      (r) =>
+        r.residentId === residentId &&
+        !r.isCorrect &&
+        r.correctionStatus === CORRECTION_STATUS.PENDING
+    ).sort((a, b) => new Date(b.time) - new Date(a.time))
+  }
+
+  const confirmResidentCorrection = (recordId, remark = '', operator = '居民自助') => {
+    const record = state.投放Records.find((r) => r.id === recordId)
+    if (!record || record.correctionStatus !== CORRECTION_STATUS.PENDING) {
+      return { success: false, message: '记录不存在或状态不允许纠正' }
+    }
+
+    record.correctionStatus = CORRECTION_STATUS.CORRECTED
+    record.correctionResult = remark || '居民已完成纠正'
+
+    const restorePoints = Math.round(Math.abs(record.pointsChange) * CORRECTION_RESTORE_RATIO)
+
+    if (restorePoints > 0) {
+      const resident = state.residents.find((r) => r.id === record.residentId)
+      if (resident) {
+        resident.points += restorePoints
+      }
+      state.pointFlows.unshift({
+        id: 'FLOW' + Date.now(),
+        residentId: record.residentId,
+        type: '纠正恢复',
+        points: restorePoints,
+        time: new Date().toISOString(),
+        recordId: record.id,
+        description: `误投纠正恢复 ${restorePoints} 积分`
+      })
+    }
+
+    const existingInReminder = state.reminderList.find(
+      (r) => r.recordId === recordId && r.status === 'active'
+    )
+    if (existingInReminder) {
+      existingInReminder.status = 'resolved'
+      existingInReminder.resolvedTime = new Date().toISOString()
+    }
+
+    state.correctionRecords.unshift({
+      id: 'COR' + Date.now(),
+      recordId: record.id,
+      residentId: record.residentId,
+      buildingId: record.buildingId,
+      action: 'corrected',
+      pointsRestored: restorePoints,
+      operator,
+      time: new Date().toISOString(),
+      remark: remark || '居民已完成纠正'
+    })
+
+    return { success: true, restorePoints, record }
+  }
+
+  const markAsRefused = (recordId, remark = '', operator = '督导员') => {
+    const record = state.投放Records.find((r) => r.id === recordId)
+    if (!record || record.correctionStatus !== CORRECTION_STATUS.PENDING) {
+      return { success: false, message: '记录不存在或状态不允许操作' }
+    }
+
+    record.correctionStatus = CORRECTION_STATUS.REFUSED
+    record.correctionResult = remark || '居民拒不纠正'
+
+    const resident = state.residents.find((r) => r.id === record.residentId)
+
+    const existingActive = state.reminderList.find(
+      (r) => r.residentId === record.residentId && r.status === 'active'
+    )
+    if (existingActive) {
+      existingActive.warnCount += 1
+    } else {
+      state.reminderList.unshift({
+        id: 'REM' + Date.now(),
+        residentId: record.residentId,
+        buildingId: record.buildingId,
+        roomNo: resident?.roomNo || '',
+        residentName: resident?.name || '未知居民',
+        recordId: record.id,
+        mis投Reason: record.mis投Reason || '',
+        addedTime: new Date().toISOString(),
+        status: 'active',
+        warnCount: 1
+      })
+    }
+
+    state.correctionRecords.unshift({
+      id: 'COR' + Date.now(),
+      recordId: record.id,
+      residentId: record.residentId,
+      buildingId: record.buildingId,
+      action: 'refused',
+      pointsRestored: 0,
+      operator,
+      time: new Date().toISOString(),
+      remark: remark || '居民拒不纠正，已进入楼栋提醒名单'
+    })
+
+    return { success: true, record }
+  }
+
+  const getReminderList = (buildingId = null) => {
+    let list = state.reminderList
+    if (buildingId) {
+      list = list.filter((r) => r.buildingId === buildingId)
+    }
+    return list
+      .filter((r) => r.status === 'active')
+      .sort((a, b) => new Date(b.addedTime) - new Date(a.addedTime))
+  }
+
+  const getReminderListByBuilding = () => {
+    return state.buildings.map((b) => {
+      const activeReminders = state.reminderList.filter(
+        (r) => r.buildingId === b.id && r.status === 'active'
+      )
+      return {
+        ...b,
+        reminderCount: activeReminders.length,
+        reminders: activeReminders
+      }
+    })
+  }
+
+  const getCorrectionStats = () => {
+    const mis投Records = state.投放Records.filter((r) => !r.isCorrect)
+    const total = mis投Records.length
+    const onsite = mis投Records.filter((r) => r.correctionStatus === CORRECTION_STATUS.ONSITE).length
+    const corrected = mis投Records.filter((r) => r.correctionStatus === CORRECTION_STATUS.CORRECTED).length
+    const pending = mis投Records.filter((r) => r.correctionStatus === CORRECTION_STATUS.PENDING).length
+    const refused = mis投Records.filter((r) => r.correctionStatus === CORRECTION_STATUS.REFUSED).length
+    return { total, onsite, corrected, pending, refused }
   }
 
   const addExchangeRecord = (record) => {
@@ -164,6 +351,16 @@ export function useDataStore() {
     getBuildingRankings,
     getMis投Analysis,
     add投放Record,
-    addExchangeRecord
+    addExchangeRecord,
+    getPendingCorrections,
+    getCorrectionsByResident,
+    getPendingByResident,
+    confirmResidentCorrection,
+    markAsRefused,
+    getReminderList,
+    getReminderListByBuilding,
+    getCorrectionStats,
+    CORRECTION_STATUS,
+    CORRECTION_RESTORE_RATIO
   }
 }

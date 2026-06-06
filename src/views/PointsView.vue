@@ -82,6 +82,14 @@
             <span>📋 投放记录</span>
             <span class="tab-count">{{ residentRecords.length }}</span>
           </button>
+          <button
+            class="detail-tab"
+            :class="{ active: activeTab === 'pending' }"
+            @click="activeTab = 'pending'"
+          >
+            <span>⏳ 待纠正</span>
+            <span class="tab-count pending" v-if="residentPending.length > 0">{{ residentPending.length }}</span>
+          </button>
         </div>
 
         <div class="detail-content">
@@ -151,9 +159,17 @@
                   <span v-if="record.supervisor">{{ record.supervisor }}</span>
                 </div>
                 <div v-if="!record.isCorrect" class="record-mis投">
-                  <span class="mis投-tag">误投原因：{{ record.mis投Reason }}</span>
+                  <div class="mis投-line">
+                    <span class="mis投-tag">误投原因：{{ record.mis投Reason }}</span>
+                    <span v-if="record.correctType" class="correct-type-tag">
+                      正确分类：{{ getCorrectTypeLabel(record.correctType) }}
+                    </span>
+                    <span v-if="getCorrectionStatusBadge(record)" class="correction-status" :class="getCorrectionStatusBadge(record).class">
+                      {{ getCorrectionStatusBadge(record).label }}
+                    </span>
+                  </div>
                   <span v-if="record.correctionResult" class="mis投-correction">
-                    纠正：{{ record.correctionResult }}
+                    {{ record.correctedOnSite ? '当场纠正：' : '备注：' }}{{ record.correctionResult }}
                   </span>
                 </div>
               </div>
@@ -163,6 +179,71 @@
             <div v-if="residentRecords.length === 0" class="empty-state">
               <div class="empty-icon">📭</div>
               <p>暂无投放记录</p>
+            </div>
+          </div>
+
+          <div v-if="activeTab === 'pending'" class="pending-list">
+            <div
+              v-for="record in residentPending"
+              :key="record.id"
+              class="pending-card"
+            >
+              <div class="pending-header">
+                <div>
+                  <div class="pending-time">{{ formatTime(record.time) }}</div>
+                  <div class="pending-location">{{ getDropPointName(record.dropPointId) }}</div>
+                </div>
+                <span class="pending-tag">待纠正</span>
+              </div>
+
+              <div class="pending-body">
+                <div class="detail-row">
+                  <span class="detail-label">误投类别</span>
+                  <span class="detail-value" :style="getTypeStyle(record.garbageType)">
+                    {{ record.garbageTypeLabel }}
+                  </span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">正确分类</span>
+                  <span class="detail-value correct" :style="getTypeStyle(record.correctType)">
+                    {{ getCorrectTypeLabel(record.correctType) }}
+                  </span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">误投原因</span>
+                  <span class="detail-value">{{ record.mis投Reason }}</span>
+                </div>
+                <div class="detail-row" v-if="record.correctionResult">
+                  <span class="detail-label">督导说明</span>
+                  <span class="detail-value">{{ record.correctionResult }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">已扣积分</span>
+                  <span class="detail-value points negative">{{ record.pointsChange }} 分</span>
+                </div>
+                <div class="detail-row highlight">
+                  <span class="detail-label">完成纠正可恢复</span>
+                  <span class="detail-value points restore">
+                    +{{ Math.round(Math.abs(record.pointsChange) * store.CORRECTION_RESTORE_RATIO) }} 分
+                  </span>
+                </div>
+              </div>
+
+              <div class="pending-footer">
+                <button
+                  class="action-btn btn-confirm"
+                  :disabled="processingId === record.id"
+                  @click="handleCorrect(record.id)"
+                >
+                  {{ processingId === record.id ? '处理中...' : '✓ 我已完成纠正' }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="residentPending.length === 0" class="empty-state">
+              <div class="empty-icon">🎉</div>
+              <h3>没有待纠正的记录</h3>
+              <p>继续保持正确投放，积累更多积分！</p>
             </div>
           </div>
         </div>
@@ -233,11 +314,22 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showResult" class="result-modal" @click.self="showResult = false">
+      <div class="result-card">
+        <div class="result-icon">{{ resultInfo.icon }}</div>
+        <h3 class="result-title">{{ resultInfo.title }}</h3>
+        <p class="result-desc">{{ resultInfo.desc }}</p>
+        <button class="result-btn" @click="showResult = false">
+          确定
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../stores/data'
 
 const store = useDataStore()
@@ -246,6 +338,13 @@ const searchText = ref('')
 const selectedResident = ref(null)
 const activeTab = ref('flows')
 const tracedRecord = ref(null)
+const processingId = ref(null)
+const showResult = ref(false)
+const resultInfo = reactive({
+  icon: '',
+  title: '',
+  desc: ''
+})
 
 const avatarColors = [
   'linear-gradient(135deg, #10b981, #059669)',
@@ -283,6 +382,10 @@ const residentRecords = computed(() =>
   selectedResident.value ? store.getRecordsByResident(selectedResident.value) : []
 )
 
+const residentPending = computed(() =>
+  selectedResident.value ? store.getPendingByResident(selectedResident.value) : []
+)
+
 const selectResident = (id) => {
   selectedResident.value = id
   activeTab.value = 'flows'
@@ -299,6 +402,7 @@ const getFlowIcon = (type) => {
   if (type === '投放奖励') return '↑'
   if (type === '误投扣减') return '↓'
   if (type === '礼品兑换') return '🎁'
+  if (type === '纠正恢复') return '↺'
   return '•'
 }
 
@@ -306,6 +410,7 @@ const getFlowIconClass = (type) => {
   if (type === '投放奖励') return 'icon-plus'
   if (type === '误投扣减') return 'icon-minus'
   if (type === '礼品兑换') return 'icon-gift'
+  if (type === '纠正恢复') return 'icon-correct'
   return ''
 }
 
@@ -313,10 +418,45 @@ const getResidentName = (id) => store.getResidentById(id)?.name || '未知'
 const getBuildingName = (id) => store.getBuildingById(id)?.name || ''
 const getDropPointName = (id) => store.state.dropPoints.find((d) => d.id === id)?.name || ''
 
+const getCorrectTypeLabel = (typeVal) => {
+  const gt = store.state.garbageTypes.find((g) => g.value === typeVal)
+  return gt?.label || ''
+}
+
+const getCorrectionStatusBadge = (record) => {
+  if (record.isCorrect) return null
+  switch (record.correctionStatus) {
+    case 'onsite':
+      return { label: '当场纠正', class: 'status-onsite' }
+    case 'pending':
+      return { label: '待纠正', class: 'status-pending' }
+    case 'corrected':
+      return { label: '已纠正', class: 'status-corrected' }
+    case 'refused':
+      return { label: '拒不纠正', class: 'status-refused' }
+    default:
+      return null
+  }
+}
+
 const getTypeStyle = (type) => {
   const gt = store.state.garbageTypes.find((g) => g.value === type)
   if (!gt) return {}
   return { color: gt.color, background: gt.bgColor, padding: '3px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 600 }
+}
+
+const handleCorrect = (recordId) => {
+  processingId.value = recordId
+  setTimeout(() => {
+    const result = store.confirmResidentCorrection(recordId, '居民自助确认已纠正')
+    processingId.value = null
+    if (result.success) {
+      resultInfo.icon = '✅'
+      resultInfo.title = '纠正成功'
+      resultInfo.desc = `已完成纠正，恢复 ${result.restorePoints} 积分`
+      showResult.value = true
+    }
+  }, 500)
 }
 
 const formatTime = (iso) => {
@@ -970,5 +1110,254 @@ const formatFullTime = (iso) => {
 
 .text-danger {
   color: var(--color-danger) !important;
+}
+
+.tab-count.pending {
+  background: var(--color-danger);
+  color: #fff;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.mis投-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.correct-type-tag {
+  padding: 2px 10px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.correction-status {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.correction-status.status-onsite { background: #d1fae5; color: #065f46; }
+.correction-status.status-pending { background: #fef3c7; color: #92400e; animation: pulse-warn 2s ease-in-out infinite; }
+.correction-status.status-corrected { background: #dbeafe; color: #1d4ed8; }
+.correction-status.status-refused { background: #fee2e2; color: #991b1b; }
+
+@keyframes pulse-warn {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pending-card {
+  background: var(--color-warning-light);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  border-left: 4px solid var(--color-warning);
+  transition: all 0.2s ease;
+}
+
+.pending-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.pending-time {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.pending-location {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.pending-tag {
+  padding: 6px 14px;
+  background: #fff;
+  color: #92400e;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  animation: pulse-warn 2s ease-in-out infinite;
+}
+
+.pending-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-row.highlight {
+  background: rgba(16, 185, 129, 0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.detail-label {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.detail-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.detail-value.correct {
+  font-weight: 700;
+}
+
+.detail-value.points.negative {
+  color: var(--color-danger);
+}
+
+.detail-value.points.restore {
+  color: var(--color-primary);
+  font-size: 16px;
+}
+
+.pending-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.action-btn {
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+.action-btn.btn-confirm {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.action-btn.btn-confirm:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--color-text-muted);
+  gap: 8px;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-top: 4px;
+}
+
+.empty-state p {
+  font-size: 14px;
+}
+
+.result-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.result-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  padding: 32px 36px;
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.result-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+}
+
+.result-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 10px;
+}
+
+.result-desc {
+  font-size: 15px;
+  color: var(--color-text-secondary);
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.result-btn {
+  padding: 14px 36px;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+  min-height: 50px;
+}
+
+.result-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
 }
 </style>

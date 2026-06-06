@@ -2,6 +2,15 @@ const now = new Date()
 const hoursAgo = (h) => new Date(now.getTime() - h * 3600 * 1000).toISOString()
 const daysAgo = (d) => new Date(now.getTime() - d * 86400 * 1000).toISOString()
 
+export const CORRECTION_STATUS = {
+  PENDING: 'pending',
+  CORRECTED: 'corrected',
+  REFUSED: 'refused',
+  ONSITE: 'onsite'
+}
+
+export const CORRECTION_RESTORE_RATIO = 0.5
+
 export const mockResidents = [
   { id: 'R001', name: '张建华', phone: '138****1234', buildingId: 'B01', roomNo: '302', points: 1280 },
   { id: 'R002', name: '李淑芬', phone: '139****5678', buildingId: 'B01', roomNo: '501', points: 890 },
@@ -46,21 +55,22 @@ export const mockMis投Reasons = [
 ]
 
 export const mock投放Records = [
-  { id: 'REC001', residentId: 'R001', buildingId: 'B01', dropPointId: 'DP01', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: true, time: hoursAgo(1), pointsChange: 3, photo: null, mis投Reason: null, correctionResult: null, supervisor: '李督导' },
-  { id: 'REC002', residentId: 'R003', buildingId: 'B02', dropPointId: 'DP01', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: hoursAgo(2), pointsChange: 5, photo: null, mis投Reason: null, correctionResult: null, supervisor: '李督导' },
-  { id: 'REC003', residentId: 'R004', buildingId: 'B02', dropPointId: 'DP02', garbageType: 'other', garbageTypeLabel: '其他垃圾', isCorrect: false, time: hoursAgo(3), pointsChange: -2, photo: 'placeholder', mis投Reason: '垃圾类别投错', correctionResult: '已现场纠正，居民表示下次注意', supervisor: '李督导' },
-  { id: 'REC004', residentId: 'R005', buildingId: 'B03', dropPointId: 'DP02', garbageType: 'hazardous', garbageTypeLabel: '有害垃圾', isCorrect: true, time: hoursAgo(4), pointsChange: 8, photo: null, mis投Reason: null, correctionResult: null, supervisor: '李督导' },
-  { id: 'REC005', residentId: 'R002', buildingId: 'B01', dropPointId: 'DP01', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: false, time: hoursAgo(5), pointsChange: -2, photo: 'placeholder', mis投Reason: '厨余未破袋', correctionResult: '已指导破袋二次分拣', supervisor: '王督导' },
-  { id: 'REC006', residentId: 'R006', buildingId: 'B03', dropPointId: 'DP03', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: hoursAgo(6), pointsChange: 5, photo: null, mis投Reason: null, correctionResult: null, supervisor: '王督导' },
-  { id: 'REC007', residentId: 'R008', buildingId: 'B04', dropPointId: 'DP03', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: true, time: hoursAgo(7), pointsChange: 3, photo: null, mis投Reason: null, correctionResult: null, supervisor: '王督导' },
-  { id: 'REC008', residentId: 'R009', buildingId: 'B05', dropPointId: 'DP03', garbageType: 'other', garbageTypeLabel: '其他垃圾', isCorrect: false, time: hoursAgo(8), pointsChange: -2, photo: 'placeholder', mis投Reason: '未分类混装', correctionResult: '已现场指导分类方法', supervisor: '李督导' },
-  { id: 'REC009', residentId: 'R010', buildingId: 'B05', dropPointId: 'DP02', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: hoursAgo(9), pointsChange: 5, photo: null, mis投Reason: null, correctionResult: null, supervisor: '李督导' },
-  { id: 'REC010', residentId: 'R007', buildingId: 'B04', dropPointId: 'DP03', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: false, time: hoursAgo(10), pointsChange: -2, photo: 'placeholder', mis投Reason: '未按时投放', correctionResult: '告知正确投放时段', supervisor: '王督导' },
-  { id: 'REC011', residentId: 'R001', buildingId: 'B01', dropPointId: 'DP01', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: daysAgo(1), pointsChange: 5, photo: null, mis投Reason: null, correctionResult: null, supervisor: '李督导' },
-  { id: 'REC012', residentId: 'R003', buildingId: 'B02', dropPointId: 'DP01', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: true, time: daysAgo(1), pointsChange: 3, photo: null, mis投Reason: null, correctionResult: null, supervisor: '李督导' },
-  { id: 'REC013', residentId: 'R005', buildingId: 'B03', dropPointId: 'DP02', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: daysAgo(2), pointsChange: 5, photo: null, mis投Reason: null, correctionResult: null, supervisor: '王督导' },
-  { id: 'REC014', residentId: 'R008', buildingId: 'B04', dropPointId: 'DP03', garbageType: 'hazardous', garbageTypeLabel: '有害垃圾', isCorrect: true, time: daysAgo(2), pointsChange: 8, photo: null, mis投Reason: null, correctionResult: null, supervisor: '李督导' },
-  { id: 'REC015', residentId: 'R010', buildingId: 'B05', dropPointId: 'DP02', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: false, time: daysAgo(3), pointsChange: -2, photo: 'placeholder', mis投Reason: '垃圾类别投错', correctionResult: '已纠正并讲解分类知识', supervisor: '王督导' }
+  { id: 'REC001', residentId: 'R001', buildingId: 'B01', dropPointId: 'DP01', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: true, time: hoursAgo(1), pointsChange: 3, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '李督导' },
+  { id: 'REC002', residentId: 'R003', buildingId: 'B02', dropPointId: 'DP01', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: hoursAgo(2), pointsChange: 5, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '李督导' },
+  { id: 'REC003', residentId: 'R004', buildingId: 'B02', dropPointId: 'DP02', garbageType: 'other', garbageTypeLabel: '其他垃圾', isCorrect: false, time: hoursAgo(3), pointsChange: -2, photo: 'placeholder', mis投Reason: '垃圾类别投错', correctType: 'recyclable', correctedOnSite: true, correctionStatus: 'onsite', correctionResult: '已现场纠正，居民表示下次注意', supervisor: '李督导' },
+  { id: 'REC004', residentId: 'R005', buildingId: 'B03', dropPointId: 'DP02', garbageType: 'hazardous', garbageTypeLabel: '有害垃圾', isCorrect: true, time: hoursAgo(4), pointsChange: 8, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '李督导' },
+  { id: 'REC005', residentId: 'R002', buildingId: 'B01', dropPointId: 'DP01', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: false, time: hoursAgo(5), pointsChange: -2, photo: 'placeholder', mis投Reason: '厨余未破袋', correctType: 'kitchen', correctedOnSite: true, correctionStatus: 'onsite', correctionResult: '已指导破袋二次分拣', supervisor: '王督导' },
+  { id: 'REC006', residentId: 'R006', buildingId: 'B03', dropPointId: 'DP03', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: hoursAgo(6), pointsChange: 5, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '王督导' },
+  { id: 'REC007', residentId: 'R008', buildingId: 'B04', dropPointId: 'DP03', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: true, time: hoursAgo(7), pointsChange: 3, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '王督导' },
+  { id: 'REC008', residentId: 'R009', buildingId: 'B05', dropPointId: 'DP03', garbageType: 'other', garbageTypeLabel: '其他垃圾', isCorrect: false, time: hoursAgo(8), pointsChange: -2, photo: 'placeholder', mis投Reason: '未分类混装', correctType: 'kitchen', correctedOnSite: false, correctionStatus: 'pending', correctionResult: null, supervisor: '李督导' },
+  { id: 'REC009', residentId: 'R010', buildingId: 'B05', dropPointId: 'DP02', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: hoursAgo(9), pointsChange: 5, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '李督导' },
+  { id: 'REC010', residentId: 'R007', buildingId: 'B04', dropPointId: 'DP03', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: false, time: hoursAgo(10), pointsChange: -2, photo: 'placeholder', mis投Reason: '未按时投放', correctType: 'kitchen', correctedOnSite: true, correctionStatus: 'onsite', correctionResult: '告知正确投放时段', supervisor: '王督导' },
+  { id: 'REC011', residentId: 'R001', buildingId: 'B01', dropPointId: 'DP01', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: daysAgo(1), pointsChange: 5, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '李督导' },
+  { id: 'REC012', residentId: 'R003', buildingId: 'B02', dropPointId: 'DP01', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: true, time: daysAgo(1), pointsChange: 3, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '李督导' },
+  { id: 'REC013', residentId: 'R005', buildingId: 'B03', dropPointId: 'DP02', garbageType: 'recyclable', garbageTypeLabel: '可回收物', isCorrect: true, time: daysAgo(2), pointsChange: 5, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '王督导' },
+  { id: 'REC014', residentId: 'R008', buildingId: 'B04', dropPointId: 'DP03', garbageType: 'hazardous', garbageTypeLabel: '有害垃圾', isCorrect: true, time: daysAgo(2), pointsChange: 8, photo: null, mis投Reason: null, correctType: null, correctedOnSite: null, correctionStatus: null, correctionResult: null, supervisor: '李督导' },
+  { id: 'REC015', residentId: 'R010', buildingId: 'B05', dropPointId: 'DP02', garbageType: 'kitchen', garbageTypeLabel: '厨余垃圾', isCorrect: false, time: daysAgo(3), pointsChange: -2, photo: 'placeholder', mis投Reason: '垃圾类别投错', correctType: 'other', correctedOnSite: false, correctionStatus: 'pending', correctionResult: null, supervisor: '王督导' },
+  { id: 'REC016', residentId: 'R001', buildingId: 'B01', dropPointId: 'DP01', garbageType: 'other', garbageTypeLabel: '其他垃圾', isCorrect: false, time: daysAgo(1), pointsChange: -2, photo: 'placeholder', mis投Reason: '未分类混装', correctType: 'kitchen', correctedOnSite: false, correctionStatus: 'refused', correctionResult: '居民拒绝配合纠正', supervisor: '李督导' }
 ]
 
 export const mockPointFlows = [
@@ -92,4 +102,55 @@ export const mockGifts = [
 export const mockExchangeRecords = [
   { id: 'EXC001', residentId: 'R005', giftId: 'G001', giftName: '洗衣液(1kg)', pointsCost: 200, time: daysAgo(1), operator: '物业张姐' },
   { id: 'EXC002', residentId: 'R008', giftId: 'G002', giftName: '食用油(1.8L)', pointsCost: 500, time: daysAgo(2), operator: '物业张姐' }
+]
+
+export const mockCorrectionRecords = [
+  {
+    id: 'COR001',
+    recordId: 'REC003',
+    residentId: 'R004',
+    buildingId: 'B02',
+    action: 'onsite',
+    pointsRestored: 0,
+    operator: '李督导',
+    time: hoursAgo(3),
+    remark: '居民当场完成重新分类'
+  },
+  {
+    id: 'COR002',
+    recordId: 'REC005',
+    residentId: 'R002',
+    buildingId: 'B01',
+    action: 'onsite',
+    pointsRestored: 0,
+    operator: '王督导',
+    time: hoursAgo(5),
+    remark: '居民当场完成厨余破袋'
+  },
+  {
+    id: 'COR003',
+    recordId: 'REC010',
+    residentId: 'R007',
+    buildingId: 'B04',
+    action: 'onsite',
+    pointsRestored: 0,
+    operator: '王督导',
+    time: hoursAgo(10),
+    remark: '居民已了解正确投放时段'
+  }
+]
+
+export const mockReminderList = [
+  {
+    id: 'REM001',
+    residentId: 'R001',
+    buildingId: 'B01',
+    roomNo: '302',
+    residentName: '张建华',
+    recordId: 'REC016',
+    mis投Reason: '未分类混装',
+    addedTime: daysAgo(1),
+    status: 'active',
+    warnCount: 1
+  }
 ]

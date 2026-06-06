@@ -21,6 +21,12 @@ const routes = [
     meta: { title: '居民积分', icon: 'star' }
   },
   {
+    path: '/correction',
+    name: 'Correction',
+    component: () => import('../views/CorrectionView.vue'),
+    meta: { title: '误投纠正', icon: 'refresh' }
+  },
+  {
     path: '/exchange',
     name: 'Exchange',
     component: () => import('../views/ExchangeView.vue'),

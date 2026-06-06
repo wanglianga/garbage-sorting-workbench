@@ -76,6 +76,7 @@ import { useDataStore } from './stores/data'
 import IconClipboard from './components/icons/IconClipboard.vue'
 import IconBuilding from './components/icons/IconBuilding.vue'
 import IconStar from './components/icons/IconStar.vue'
+import IconRefresh from './components/icons/IconRefresh.vue'
 import IconGift from './components/icons/IconGift.vue'
 
 const route = useRoute()
@@ -102,6 +103,7 @@ const iconMap = {
   clipboard: IconClipboard,
   building: IconBuilding,
   star: IconStar,
+  refresh: IconRefresh,
   gift: IconGift
 }
 

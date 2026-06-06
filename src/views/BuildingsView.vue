@@ -86,6 +86,55 @@
             </div>
           </div>
         </div>
+
+        <div class="panel reminder-panel">
+          <div class="panel-header">
+            <h3 class="panel-title">🔔 楼栋提醒名单</h3>
+            <span class="panel-badge reminder-badge">共 {{ totalReminderCount }} 人</span>
+          </div>
+          <div class="reminder-list">
+            <div
+              v-for="b in reminderByBuilding"
+              :key="b.id"
+              class="reminder-building"
+            >
+              <div class="reminder-building-header">
+                <span class="building-name">{{ b.name }}</span>
+                <span class="reminder-count" :class="{ 'has-count': b.reminderCount > 0 }">
+                  {{ b.reminderCount }} 人
+                </span>
+              </div>
+              <div v-if="b.reminderCount > 0" class="reminder-items">
+                <div
+                  v-for="rem in b.reminders"
+                  :key="rem.id"
+                  class="reminder-item"
+                >
+                  <div class="reminder-avatar" :style="{ background: avatarColor(rem.residentId) }">
+                    {{ rem.residentName.charAt(0) }}
+                  </div>
+                  <div class="reminder-info">
+                    <div class="reminder-name">
+                      {{ rem.residentName }}
+                      <span class="reminder-room">{{ rem.roomNo }}</span>
+                    </div>
+                    <div class="reminder-reason">
+                      原因：{{ rem.mis投Reason }}
+                    </div>
+                    <div class="reminder-meta">
+                      <span>{{ formatTime(rem.addedTime) }}</span>
+                      <span>·</span>
+                      <span>第 {{ rem.warnCount }} 次提醒</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="reminder-empty">
+                暂无待提醒居民 🎉
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -105,14 +154,41 @@ const reasonChartRef = ref(null)
 let hourChart = null
 let reasonChart = null
 
+const avatarColors = [
+  'linear-gradient(135deg, #10b981, #059669)',
+  'linear-gradient(135deg, #3b82f6, #2563eb)',
+  'linear-gradient(135deg, #f59e0b, #d97706)',
+  'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+  'linear-gradient(135deg, #ec4899, #db2777)',
+  'linear-gradient(135deg, #14b8a6, #0d9488)'
+]
+
 const rankings = computed(() => store.getBuildingRankings())
 const mis投Analysis = computed(() => store.getMis投Analysis())
+const reminderByBuilding = computed(() => store.getReminderListByBuilding())
+const totalReminderCount = computed(() =>
+  reminderByBuilding.value.reduce((sum, b) => sum + b.reminderCount, 0)
+)
 
 const sortedByReason = computed(() =>
   [...mis投Analysis.value.byReason].sort((a, b) => b.value - a.value).slice(0, 5)
 )
 
 const maxReason = computed(() => Math.max(...sortedByReason.value.map((i) => i.value), 1))
+
+const avatarColor = (id) => {
+  const idx = parseInt(id?.replace(/\D/g, '') || '0') % avatarColors.length
+  return avatarColors[idx]
+}
+
+const formatTime = (iso) => {
+  const d = new Date(iso)
+  const diff = (Date.now() - d.getTime()) / 1000
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
 
 const progressGradient = (idx) => {
   const gradients = [
@@ -550,5 +626,140 @@ watch(
   font-weight: 700;
   color: var(--color-danger);
   flex-shrink: 0;
+}
+
+.reminder-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.reminder-badge {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #991b1b;
+}
+
+.reminder-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reminder-building {
+  background: var(--color-border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.reminder-building-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.reminder-building-header .building-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.reminder-count {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: var(--color-text-secondary);
+}
+
+.reminder-count.has-count {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.reminder-items {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reminder-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-danger);
+}
+
+.reminder-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.reminder-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 3px;
+}
+
+.reminder-room {
+  margin-left: 6px;
+  padding: 1px 8px;
+  background: var(--color-border-light);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.reminder-reason {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-danger);
+  margin-bottom: 3px;
+}
+
+.reminder-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.reminder-empty {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  font-weight: 500;
 }
 </style>

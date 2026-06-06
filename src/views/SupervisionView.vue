@@ -75,6 +75,45 @@
           <div v-if="!form.isCorrect" class="mis投-section">
             <div class="form-row">
               <div class="form-field">
+                <label>误投类别（投错类别）</label>
+                <div class="garbage-types small">
+                  <button
+                    v-for="gt in store.state.garbageTypes"
+                    :key="gt.value"
+                    class="type-btn"
+                    :class="{ active: form.garbageType === gt.value }"
+                    :style="{ '--type-color': gt.color, '--type-bg': gt.bgColor }"
+                    @click="form.garbageType = gt.value; form.garbageTypeLabel = gt.label; form.points = gt.points"
+                  >
+                    <span class="type-dot"></span>
+                    <span class="type-name">{{ gt.label }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
+                <label>正确分类</label>
+                <div class="garbage-types small">
+                  <button
+                    v-for="gt in store.state.garbageTypes"
+                    :key="gt.value"
+                    class="type-btn"
+                    :class="{ active: form.correctType === gt.value }"
+                    :style="{ '--type-color': gt.color, '--type-bg': gt.bgColor }"
+                    @click="form.correctType = gt.value; form.correctTypeLabel = gt.label"
+                  >
+                    <span class="type-dot"></span>
+                    <span class="type-name">{{ gt.label }}</span>
+                  </button>
+                </div>
+                <p class="field-hint">提示：标注正确分类，便于居民了解正确投放方式</p>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
                 <label>误投原因</label>
                 <div class="reason-chips">
                   <button
@@ -110,12 +149,42 @@
 
             <div class="form-row">
               <div class="form-field">
-                <label>纠正结果</label>
+                <label>是否当场纠正</label>
+                <div class="onsite-toggle">
+                  <button
+                    class="onsite-btn onsite-yes"
+                    :class="{ active: form.correctedOnSite === true }"
+                    @click="form.correctedOnSite = true"
+                  >
+                    <span class="onsite-icon">✓</span>
+                    <span>当场已纠正</span>
+                  </button>
+                  <button
+                    class="onsite-btn onsite-no"
+                    :class="{ active: form.correctedOnSite === false }"
+                    @click="form.correctedOnSite = false"
+                  >
+                    <span class="onsite-icon">⏳</span>
+                    <span>待居民纠正</span>
+                  </button>
+                </div>
+                <p class="field-hint" v-if="form.correctedOnSite === true">
+                  当场完成纠正，不进入待纠正队列
+                </p>
+                <p class="field-hint warning" v-else-if="form.correctedOnSite === false">
+                  居民可主动纠正恢复 {{ Math.round(2 * store.CORRECTION_RESTORE_RATIO) }} 积分；拒不纠正将进入楼栋提醒名单
+                </p>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
+                <label>{{ form.correctedOnSite ? '纠正结果' : '督导备注' }}</label>
                 <textarea
                   v-model="form.correctionResult"
                   class="form-textarea"
                   rows="2"
-                  placeholder="请记录现场纠正情况..."
+                  :placeholder="form.correctedOnSite ? '请记录现场纠正情况...' : '请记录需居民纠正的说明...'"
                 ></textarea>
               </div>
             </div>
@@ -188,9 +257,17 @@
                 <span v-if="record.supervisor">{{ record.supervisor }}</span>
               </div>
               <div v-if="!record.isCorrect" class="record-mis投">
-                <span class="mis投-tag">误投原因：{{ record.mis投Reason }}</span>
+                <div class="mis投-line">
+                  <span class="mis投-tag">误投原因：{{ record.mis投Reason }}</span>
+                  <span v-if="record.correctType" class="correct-type-tag">
+                    正确分类：{{ getCorrectTypeLabel(record.correctType) }}
+                  </span>
+                  <span v-if="getCorrectionStatusBadge(record)" class="correction-status" :class="getCorrectionStatusBadge(record).class">
+                    {{ getCorrectionStatusBadge(record).label }}
+                  </span>
+                </div>
                 <span v-if="record.correctionResult" class="mis投-correction">
-                  纠正：{{ record.correctionResult }}
+                  {{ record.correctedOnSite ? '当场纠正：' : '备注：' }}{{ record.correctionResult }}
                 </span>
               </div>
             </div>
@@ -231,13 +308,20 @@ const form = reactive({
   isCorrect: true,
   mis投Reason: '',
   photo: null,
+  correctType: '',
+  correctTypeLabel: '',
+  correctedOnSite: null,
   correctionResult: '',
   points: 0
 })
 
 const canSubmit = computed(() => {
   if (!form.residentId || !form.garbageType) return false
-  if (!form.isCorrect && !form.mis投Reason) return false
+  if (!form.isCorrect) {
+    if (!form.mis投Reason) return false
+    if (!form.correctType) return false
+    if (form.correctedOnSite === null) return false
+  }
   return true
 })
 
@@ -254,6 +338,9 @@ const setCorrect = (val) => {
     form.mis投Reason = ''
     form.photo = null
     form.correctionResult = ''
+    form.correctType = ''
+    form.correctTypeLabel = ''
+    form.correctedOnSite = null
   }
 }
 
@@ -276,6 +363,8 @@ const submitRecord = () => {
     pointsChange,
     photo: form.photo,
     mis投Reason: form.mis投Reason || null,
+    correctType: form.correctType || null,
+    correctedOnSite: form.correctedOnSite,
     correctionResult: form.correctionResult || null,
     supervisor: '李督导'
   })
@@ -286,8 +375,32 @@ const submitRecord = () => {
   form.isCorrect = true
   form.mis投Reason = ''
   form.photo = null
+  form.correctType = ''
+  form.correctTypeLabel = ''
+  form.correctedOnSite = null
   form.correctionResult = ''
   form.points = 0
+}
+
+const getCorrectTypeLabel = (typeVal) => {
+  const gt = store.state.garbageTypes.find((g) => g.value === typeVal)
+  return gt?.label || ''
+}
+
+const getCorrectionStatusBadge = (record) => {
+  if (record.isCorrect) return null
+  switch (record.correctionStatus) {
+    case 'onsite':
+      return { label: '当场纠正', class: 'status-onsite' }
+    case 'pending':
+      return { label: '待纠正', class: 'status-pending' }
+    case 'corrected':
+      return { label: '已纠正', class: 'status-corrected' }
+    case 'refused':
+      return { label: '拒不纠正', class: 'status-refused' }
+    default:
+      return null
+  }
 }
 
 const getResidentName = (id) => store.getResidentById(id)?.name || '未知'
@@ -866,5 +979,132 @@ const formatTime = (iso) => {
 .empty-icon {
   font-size: 48px;
   margin-bottom: 12px;
+}
+
+.garbage-types.small .type-btn {
+  min-height: 60px;
+  padding: 10px 8px;
+}
+
+.garbage-types.small .type-name {
+  font-size: 13px;
+}
+
+.garbage-types.small .type-dot {
+  width: 12px;
+  height: 12px;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.field-hint.warning {
+  color: var(--color-warning);
+  font-weight: 500;
+}
+
+.onsite-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.onsite-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.25s ease;
+  min-height: 58px;
+  color: var(--color-text-secondary);
+  background: var(--color-border-light);
+}
+
+.onsite-btn:hover {
+  transform: translateY(-2px);
+}
+
+.onsite-btn.onsite-yes.active {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border-color: var(--color-primary);
+  color: #065f46;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+}
+
+.onsite-btn.onsite-no.active {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: var(--color-warning);
+  color: #92400e;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
+}
+
+.onsite-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.mis投-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.correct-type-tag {
+  padding: 2px 10px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.correction-status {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.correction-status.status-onsite {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.correction-status.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+  animation: pulse-warn 2s ease-in-out infinite;
+}
+
+.correction-status.status-corrected {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.correction-status.status-refused {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+@keyframes pulse-warn {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 </style>
